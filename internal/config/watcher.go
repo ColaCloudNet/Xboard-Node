@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/ColaCloudNet/Xboard-Node/internal/nlog"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -56,7 +56,6 @@ func WatchConfig(ctx context.Context, path string, onChange func(*Config)) (*Wat
 	nlog.Core().Info("config watcher started", "path", absPath)
 	return w, nil
 }
-
 
 // WatchConfigRoot watches path and reloads the root config model.
 func WatchConfigRoot(ctx context.Context, path string, onChange func(*RootConfig)) (*Watcher, error) {

@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cedar2025/xboard-node/internal/config"
-	"github.com/cedar2025/xboard-node/internal/controlplane"
-	"github.com/cedar2025/xboard-node/internal/model"
-	"github.com/cedar2025/xboard-node/internal/monitor"
-	"github.com/cedar2025/xboard-node/internal/nlog"
-	"github.com/cedar2025/xboard-node/internal/panel"
-	"github.com/cedar2025/xboard-node/internal/service"
+	"github.com/ColaCloudNet/Xboard-Node/internal/config"
+	"github.com/ColaCloudNet/Xboard-Node/internal/controlplane"
+	"github.com/ColaCloudNet/Xboard-Node/internal/model"
+	"github.com/ColaCloudNet/Xboard-Node/internal/monitor"
+	"github.com/ColaCloudNet/Xboard-Node/internal/nlog"
+	"github.com/ColaCloudNet/Xboard-Node/internal/panel"
+	"github.com/ColaCloudNet/Xboard-Node/internal/service"
 )
 
 // nodeHandle tracks a running node service.

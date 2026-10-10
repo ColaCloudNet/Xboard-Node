@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cedar2025/xboard-node/internal/nlog"
+	"github.com/ColaCloudNet/Xboard-Node/internal/nlog"
 )
 
 const (
