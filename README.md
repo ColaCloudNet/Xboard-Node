@@ -1,4 +1,6 @@
-# xboard-node
+# xboard-node (ColaCloudNet fork)
+
+Fork of [cedar2025/Xboard-Node](https://github.com/cedar2025/Xboard-Node) for ColaCloud secondary development.
 
 Node backend for [Xboard](https://github.com/cedar2025/Xboard). Supports `sing-box` / `xray-core` dual kernels.
 
@@ -19,14 +21,14 @@ Node backend for [Xboard](https://github.com/cedar2025/Xboard). Supports `sing-b
 ```bash
 docker run -d --restart=always --network=host \
   -e apiHost=https://panel.com -e apiKey=TOKEN -e nodeID=1 \
-  ghcr.io/cedar2025/xboard-node:latest
+  ghcr.io/colacloudnet/xboard-node:latest
 ```
 
 ### Docker Compose
 
 ```bash
-git clone -b compose --depth 1 https://github.com/cedar2025/xboard-node.git
-cd xboard-node
+git clone -b compose --depth 1 https://github.com/ColaCloudNet/Xboard-Node.git
+cd Xboard-Node
 vim config/config.yml   # set panel.url / token / node_id
 docker compose up -d
 ```
@@ -35,12 +37,13 @@ docker compose up -d
 
 ```bash
 # Node mode
-curl -fsSL https://raw.githubusercontent.com/cedar2025/xboard-node/dev/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/ColaCloudNet/Xboard-Node/dev/install.sh | \
   sudo bash -s -- --mode node --panel https://panel.example.com --token TOKEN --node-id 1
 
 # Machine mode
-curl -fsSL https://raw.githubusercontent.com/cedar2025/xboard-node/dev/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/ColaCloudNet/Xboard-Node/dev/install.sh | \
   sudo bash -s -- --mode machine --panel https://panel.example.com --token TOKEN --machine-id 1
+```
 
 ## xbctl
 
@@ -65,6 +68,16 @@ Legacy single-panel config is fully compatible. Appending bindings auto-migrates
 - Custom outbounds: [docs-custom-outbounds.md](docs-custom-outbounds.md)
 - DNS providers (ACME DNS-01): [docs-dns-providers.md](docs-dns-providers.md)
 
+## Build
+
+Requires Go 1.26+.
+
+```bash
+make build        # local binaries (includes with_acme)
+make test         # go test -race ./internal/...
+make build-linux  # linux/amd64 release-style binaries
+```
+
 ## License
 
-MPL-2.0.
+MPL-2.0. See [LICENSE](LICENSE). Upstream project: [cedar2025/Xboard-Node](https://github.com/cedar2025/Xboard-Node).
