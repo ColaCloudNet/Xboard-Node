@@ -13,7 +13,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags "-s -w \
     -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo dev) \
     -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    -tags "with_quic with_utls with_wireguard with_clash_api" \
+    -tags "with_quic with_utls with_wireguard with_acme with_clash_api" \
     -o xboard-node ./cmd/xboard-node
 
 # Runtime stage — sing-box & xray-core are embedded as Go libraries
@@ -33,7 +33,7 @@ WORKDIR /etc/xboard-node
 #     -e apiHost=https://panel.example.com \
 #     -e apiKey=YOUR_TOKEN \
 #     -e nodeID=1 \
-#     ghcr.io/cedar2025/xboard-node:latest
+#     ghcr.io/colacloudnet/xboard-node:latest
 #
 # Supported env vars:
 #   apiHost  / API_HOST    → panel URL

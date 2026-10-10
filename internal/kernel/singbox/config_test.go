@@ -5,10 +5,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cedar2025/xboard-node/internal/config"
-	"github.com/cedar2025/xboard-node/internal/kernel"
-	"github.com/cedar2025/xboard-node/internal/model"
-	"github.com/cedar2025/xboard-node/internal/panel"
+	"github.com/ColaCloudNet/Xboard-Node/internal/config"
+	"github.com/ColaCloudNet/Xboard-Node/internal/kernel"
+	"github.com/ColaCloudNet/Xboard-Node/internal/model"
+	"github.com/ColaCloudNet/Xboard-Node/internal/panel"
 )
 
 var testUsersPanel = []panel.User{
