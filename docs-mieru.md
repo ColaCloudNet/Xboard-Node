@@ -27,3 +27,9 @@ sing-box inbounds are built with `"listen": "::"` (dual-stack). Panel `listen_ip
 
 - If the kernel fails to start (bad outbound, port in use, etc.), the process / machine child node **does not auto-retry**. Restart the process (systemd/`xbctl service restart`/container) after fixing the cause.
 - Sprint A scope is TCP-only; UDP E2E is out of scope for v1.
+
+## TCP underlay idle reclaim
+
+Stock `enfein/mieru` **v3.29.0–v3.38.1** server Mux never reclaims empty TCP underlays after sessions end ([enfein/mieru#317](https://github.com/enfein/mieru/issues/317)): `ESTABLISHED` can keep growing while clients hold or abandon connections. This is **not** kernel `TIME_WAIT` and **not** `CLOSE_WAIT`.
+
+ColaCloudNet ships a patched mieru (via `ColaCloudNet/sing-box` → `third_party/mieru`) that closes server underlays after they have had no live sessions for `ServerUnderlayIdleTimeout` (default ≈ `scheduleIdleTime`, ~2–3 minutes on typical hosts). See [ColaCloudNet/mieru#1](https://github.com/ColaCloudNet/mieru/pull/1).

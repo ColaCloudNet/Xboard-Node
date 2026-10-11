@@ -52,8 +52,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/ColaCloudNet/Xray-core v0.0.0-20260409213332-f47935539965 h1:DzHvgIk3Y5LMpJjcuIMwMMcq8XQ2GpwHi++km4y1t8s=
 github.com/ColaCloudNet/Xray-core v0.0.0-20260409213332-f47935539965/go.mod h1:OXMlhBloFry8mw0KwWLWLd3RQyXJzEYsCGlgsX36h60=
-github.com/ColaCloudNet/sing-box v1.14.0-alpha.2.0.20261011080905-f23e6ec4de44 h1:X0JjEMkXwLZc7z4aKlDU5xq/1tTQFmnFbRAVF97rzvE=
-github.com/ColaCloudNet/sing-box v1.14.0-alpha.2.0.20261011080905-f23e6ec4de44/go.mod h1:jr1H7ofKrXO7NYoNaDlNRHaemY/61UT4hkTKNC0kZlM=
+github.com/ColaCloudNet/sing-box v1.14.0-alpha.2.0.20261011091432-44a8d416072b h1:R8n73TelIXvP8kbFfbLwyX+bkOhgpgKrvbSt0lxFfgo=
+github.com/ColaCloudNet/sing-box v1.14.0-alpha.2.0.20261011091432-44a8d416072b/go.mod h1:T/2j0o5wdLeYcDvWppNPsge1IJW6Va3rLLlTYGJq8ss=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/PuerkitoBio/purell v1.1.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/purell v1.1.1 h1:WEQqlqaGbrPkxLJWfBwQmfEAE1Z7ONdDLqrN38tNFfI=
