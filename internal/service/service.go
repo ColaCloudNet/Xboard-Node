@@ -288,6 +288,7 @@ func (s *Service) initialSetup(ctx context.Context) error {
 		}
 		return fmt.Errorf("initial config is nil")
 	}
+	s.ensureKernelForNode(bootstrap.Config)
 	if err := validateNodeRuntime(s.cfg, s.kernel.Protocols(), bootstrap.Config, s.cert.TLSCert()); err != nil {
 		return err
 	}
@@ -543,6 +544,7 @@ func (s *Service) handleWSEvent(ctx context.Context, event controlplane.Event) {
 		if newConfigHash == s.lastConfigHash {
 			return
 		}
+		s.ensureKernelForNode(event.Config)
 		if err := validateNodeRuntime(s.cfg, s.kernel.Protocols(), event.Config, s.cert.TLSCert()); err != nil {
 			nlog.Core().Warn("ws config validation failed, ignoring update", "error", err)
 			return
@@ -652,6 +654,7 @@ func (s *Service) applyPullResult(ctx context.Context, result pullResult) {
 	}
 
 	if result.config != nil {
+		s.ensureKernelForNode(result.config)
 		if err := validateNodeRuntime(s.cfg, s.kernel.Protocols(), result.config, s.cert.TLSCert()); err != nil {
 			nlog.Core().Warn("runtime config validation failed", "error", err)
 			result.config = nil
@@ -1147,6 +1150,41 @@ func (s *Service) sendDeviceBatch() {
 // reportDevices periodically reports device snapshot to panel.
 func (s *Service) reportDevices() {
 	s.sendDeviceBatch()
+}
+
+// ensureKernelForNode switches the running kernel when the node protocol or
+// V2Ray network transport requires a different one (mieru→singbox, xhttp→xray).
+// Callbacks are re-bound after a swap. Returns the kernel type in effect.
+func (s *Service) ensureKernelForNode(spec *model.NodeSpec) string {
+	current := strings.ToLower(strings.TrimSpace(s.cfg.Kernel.Type))
+	if current == "" || current == "sing-box" {
+		current = "singbox"
+	}
+	if spec == nil {
+		return current
+	}
+	resolved := model.ResolveKernelForNode(spec.Protocol, spec.Network, current)
+	resolvedNorm := strings.ToLower(strings.TrimSpace(resolved))
+	if resolvedNorm == "sing-box" {
+		resolvedNorm = "singbox"
+	}
+	if resolvedNorm == current {
+		return current
+	}
+
+	nlog.Core().Info("auto-switching kernel for node protocol/transport",
+		"from", current, "to", resolvedNorm,
+		"protocol", spec.Protocol, "network", spec.Network)
+	s.cfg.Kernel.Type = resolvedNorm
+	switch resolvedNorm {
+	case "xray":
+		s.kernel = xray.New(s.cfg.Kernel)
+	default:
+		s.kernel = singbox.New(s.cfg.Kernel)
+	}
+	s.kernel.SetSpeedLimitFunc(s.speedTracker.GetLimiter)
+	s.kernel.SetDeviceLimitFunc(s.limiter.GetDeviceLimitByUUID)
+	return resolvedNorm
 }
 
 // ─── Runtime validation ─────────────────────────────────────────────────

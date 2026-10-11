@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -16,9 +17,16 @@ func ValidateNodeSpec(n *NodeSpec, kcfg config.KernelConfig) error {
 	if effectiveKernelType == "" {
 		effectiveKernelType = strings.TrimSpace(n.KernelType)
 	}
+	// Protocol-forced kernels (e.g. mieru → singbox) must win so outbound/route
+	// validation and runtime checks see the kernel that will actually run.
+	effectiveKernelType = ResolveKernelForProtocol(n.Protocol, effectiveKernelType)
 	kernelType, err := normalizeKernelType(effectiveKernelType)
 	if err != nil {
 		return fmt.Errorf("normalize kernel type: %w", err)
+	}
+
+	if err := validateMieruFields(n); err != nil {
+		return err
 	}
 
 	additionalOutboundSources, err := collectAdditionalOutboundTagSources(kcfg.CustomConfig, kcfg.CustomOutbound)
@@ -48,6 +56,11 @@ var singboxUnsupportedTransports = map[string]bool{
 	"splithttp": true,
 }
 
+// singboxOnlyProtocols lists inbound protocols that only exist on sing-box.
+var singboxOnlyProtocols = map[string]bool{
+	"mieru": true,
+}
+
 func validateTransportKernel(network, kernelType string) error {
 	net := strings.ToLower(strings.TrimSpace(network))
 	if kernelType == "singbox" && singboxUnsupportedTransports[net] {
@@ -62,10 +75,54 @@ func validateTransportKernel(network, kernelType string) error {
 // This is used in machine mode to auto-switch kernel per node.
 func ResolveKernelForTransport(network, configuredKernel string) string {
 	net := strings.ToLower(strings.TrimSpace(network))
-	if configuredKernel == "singbox" && singboxUnsupportedTransports[net] {
+	cfg := strings.ToLower(strings.TrimSpace(configuredKernel))
+	if (cfg == "singbox" || cfg == "sing-box") && singboxUnsupportedTransports[net] {
 		return "xray"
 	}
 	return configuredKernel
+}
+
+// ResolveKernelForProtocol returns the kernel required by the inbound protocol.
+// Protocols that only exist on sing-box (currently mieru) always resolve to
+// "singbox", even when the local config or panel asks for xray.
+func ResolveKernelForProtocol(protocol, configuredKernel string) string {
+	proto := strings.ToLower(strings.TrimSpace(protocol))
+	if singboxOnlyProtocols[proto] {
+		return "singbox"
+	}
+	return configuredKernel
+}
+
+// ResolveKernelForNode applies transport then protocol resolution. Protocol
+// wins last so mieru cannot be flipped back to xray by an unrelated network=
+// field.
+func ResolveKernelForNode(protocol, network, configuredKernel string) string {
+	resolved := ResolveKernelForTransport(network, configuredKernel)
+	return ResolveKernelForProtocol(protocol, resolved)
+}
+
+// validateMieruFields normalizes and checks mieru-specific panel fields.
+// v1 is TCP-only: empty transport defaults to "TCP"; any other value is rejected.
+func validateMieruFields(n *NodeSpec) error {
+	if n == nil || !strings.EqualFold(strings.TrimSpace(n.Protocol), "mieru") {
+		return nil
+	}
+
+	transport := strings.TrimSpace(n.Transport)
+	if transport == "" {
+		n.Transport = "TCP"
+	} else if !strings.EqualFold(transport, "TCP") {
+		return fmt.Errorf("mieru transport %q is not supported in v1 (TCP only); got %q", transport, n.Transport)
+	} else {
+		n.Transport = "TCP"
+	}
+
+	if pat := strings.TrimSpace(n.TrafficPattern); pat != "" {
+		if _, err := base64.StdEncoding.DecodeString(pat); err != nil {
+			return fmt.Errorf("mieru traffic_pattern must be valid base64: %w", err)
+		}
+	}
+	return nil
 }
 
 func normalizeKernelType(value string) (string, error) {
