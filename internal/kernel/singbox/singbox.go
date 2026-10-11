@@ -225,68 +225,33 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 		nlog.Core().Debug("sing-box routing reloaded")
 	}
 
-	// Configuration hash check for inbound reconstruction
+	// Recreate only when inbound structure / aux outbounds / TLS changed.
+	// User-only and route-only diffs must NOT force a full kernel restart
+	// (sing-box v1.14+ has no InboundManager.Remove).
 	tlsChanged := !bytes.Equal(s.tls.CertPEM, tls.CertPEM) || !bytes.Equal(s.tls.KeyPEM, tls.KeyPEM)
-	configChanged := tlsChanged || s.nodeConfig == nil || kernel.ComputeHash(nodeConfig, users) != kernel.ComputeHash(s.nodeConfig, s.users)
+	needsRecreate := kernel.InboundNeedsRecreate(s.nodeConfig, nodeConfig, tlsChanged)
+	usersChanged := kernel.ComputeUserIdentityHash(users) != kernel.ComputeUserIdentityHash(s.users)
 
 	for _, inb := range opts.Inbounds {
 		tag := inb.Tag
-		if !configChanged {
-			if existing, ok := im.Get(tag); ok && existing.Type() == inb.Type {
-				var err error
-				switch v := existing.(type) {
-				case adapter.UpdatableInbound[option.VMessUser]:
-					if opts, ok := inb.Options.(*option.VMessInboundOptions); ok {
-						err = v.UpdateUsers(opts.Users)
-					}
-				case adapter.UpdatableInbound[option.VLESSUser]:
-					if opts, ok := inb.Options.(*option.VLESSInboundOptions); ok {
-						err = v.UpdateUsers(opts.Users)
-					}
-				case adapter.UpdatableInbound[option.TrojanUser]:
-					if opts, ok := inb.Options.(*option.TrojanInboundOptions); ok {
-						err = v.UpdateUsers(opts.Users)
-					}
-				case adapter.UpdatableInbound[option.Hysteria2User]:
-					if opts, ok := inb.Options.(*option.Hysteria2InboundOptions); ok {
-						err = v.UpdateUsers(opts.Users)
-					}
-				case adapter.UpdatableShadowsocksInbound:
-					if opts, ok := inb.Options.(*option.ShadowsocksInboundOptions); ok {
-						err = v.UpdateUsersByOptions(opts.Users)
-					}
-				case adapter.UpdatableInbound[option.TUICUser]:
-					if opts, ok := inb.Options.(*option.TUICInboundOptions); ok {
-						err = v.UpdateUsers(opts.Users)
-					}
-				case adapter.UpdatableInbound[option.AnyTLSUser]:
-					if opts, ok := inb.Options.(*option.AnyTLSInboundOptions); ok {
-						err = v.UpdateUsers(opts.Users)
-					}
-				case adapter.UpdatableInbound[option.MieruUser]:
-					if opts, ok := inb.Options.(*option.MieruInboundOptions); ok {
-						err = v.UpdateUsers(opts.Users)
-					}
-				case adapter.UpdatableInbound[auth.User]:
-					switch opts := inb.Options.(type) {
-					case *option.NaiveInboundOptions:
-						err = v.UpdateUsers(opts.Users)
-					case *option.SocksInboundOptions:
-						err = v.UpdateUsers(opts.Users)
-					case *option.HTTPMixedInboundOptions:
-						err = v.UpdateUsers(opts.Users)
-					}
-				}
-				if err == nil {
-					continue
-				}
-				nlog.Core().Warn("incremental update failed, falling back to recreate", "tag", tag, "error", err)
-			}
+		if needsRecreate {
+			return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
 		}
 
-		// sing-box v1.14+ removed InboundManager.Remove (no hot-reload recreate).
-		// Fall back to full kernel restart so the caller can rebuild the box.
-		return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
+		existing, ok := im.Get(tag)
+		if !ok || existing.Type() != inb.Type {
+			return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
+		}
+
+		updated, err := updateInboundUsers(existing, inb)
+		if err != nil {
+			nlog.Core().Warn("incremental update failed, falling back to recreate", "tag", tag, "error", err)
+			return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
+		}
+		if !updated && usersChanged {
+			// Inbound does not implement UpdatableInbound (e.g. mieru before UpdateUsers).
+			return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
+		}
 	}
 
 	// Trackers remain registered on the Router (which survives ReloadUsers).
@@ -300,6 +265,76 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 	s.nodeConfig = nodeConfig
 	s.tls = tls
 	return nil
+}
+
+
+// updateInboundUsers hot-swaps credentials on an existing inbound via
+// UpdatableInbound. updated=false means the inbound type has no user API
+// (caller decides whether to no-op or recreate).
+func updateInboundUsers(existing adapter.Inbound, inb option.Inbound) (updated bool, err error) {
+	switch v := existing.(type) {
+	case adapter.UpdatableInbound[option.VMessUser]:
+		opts, ok := inb.Options.(*option.VMessInboundOptions)
+		if !ok {
+			return false, fmt.Errorf("vmess options type mismatch")
+		}
+		return true, v.UpdateUsers(opts.Users)
+	case adapter.UpdatableInbound[option.VLESSUser]:
+		opts, ok := inb.Options.(*option.VLESSInboundOptions)
+		if !ok {
+			return false, fmt.Errorf("vless options type mismatch")
+		}
+		return true, v.UpdateUsers(opts.Users)
+	case adapter.UpdatableInbound[option.TrojanUser]:
+		opts, ok := inb.Options.(*option.TrojanInboundOptions)
+		if !ok {
+			return false, fmt.Errorf("trojan options type mismatch")
+		}
+		return true, v.UpdateUsers(opts.Users)
+	case adapter.UpdatableInbound[option.Hysteria2User]:
+		opts, ok := inb.Options.(*option.Hysteria2InboundOptions)
+		if !ok {
+			return false, fmt.Errorf("hysteria2 options type mismatch")
+		}
+		return true, v.UpdateUsers(opts.Users)
+	case adapter.UpdatableShadowsocksInbound:
+		opts, ok := inb.Options.(*option.ShadowsocksInboundOptions)
+		if !ok {
+			return false, fmt.Errorf("shadowsocks options type mismatch")
+		}
+		return true, v.UpdateUsersByOptions(opts.Users)
+	case adapter.UpdatableInbound[option.TUICUser]:
+		opts, ok := inb.Options.(*option.TUICInboundOptions)
+		if !ok {
+			return false, fmt.Errorf("tuic options type mismatch")
+		}
+		return true, v.UpdateUsers(opts.Users)
+	case adapter.UpdatableInbound[option.AnyTLSUser]:
+		opts, ok := inb.Options.(*option.AnyTLSInboundOptions)
+		if !ok {
+			return false, fmt.Errorf("anytls options type mismatch")
+		}
+		return true, v.UpdateUsers(opts.Users)
+	case adapter.UpdatableInbound[option.MieruUser]:
+		opts, ok := inb.Options.(*option.MieruInboundOptions)
+		if !ok {
+			return false, fmt.Errorf("mieru options type mismatch")
+		}
+		return true, v.UpdateUsers(opts.Users)
+	case adapter.UpdatableInbound[auth.User]:
+		switch opts := inb.Options.(type) {
+		case *option.NaiveInboundOptions:
+			return true, v.UpdateUsers(opts.Users)
+		case *option.SocksInboundOptions:
+			return true, v.UpdateUsers(opts.Users)
+		case *option.HTTPMixedInboundOptions:
+			return true, v.UpdateUsers(opts.Users)
+		default:
+			return false, fmt.Errorf("auth inbound options type mismatch")
+		}
+	default:
+		return false, nil
+	}
 }
 
 // registerTracker wires the ConnTracker to the current Router exactly once.
@@ -526,58 +561,18 @@ func (s *SingBox) reloadInboundsLocked(users []model.UserSpec) error {
 
 	for _, inb := range opts.Inbounds {
 		tag := inb.Tag
-		if existing, ok := im.Get(tag); ok && existing.Type() == inb.Type {
-			var err error
-			switch v := existing.(type) {
-			case adapter.UpdatableInbound[option.VMessUser]:
-				if opts, ok := inb.Options.(*option.VMessInboundOptions); ok {
-					err = v.UpdateUsers(opts.Users)
-				}
-			case adapter.UpdatableInbound[option.VLESSUser]:
-				if opts, ok := inb.Options.(*option.VLESSInboundOptions); ok {
-					err = v.UpdateUsers(opts.Users)
-				}
-			case adapter.UpdatableInbound[option.TrojanUser]:
-				if opts, ok := inb.Options.(*option.TrojanInboundOptions); ok {
-					err = v.UpdateUsers(opts.Users)
-				}
-			case adapter.UpdatableInbound[option.Hysteria2User]:
-				if opts, ok := inb.Options.(*option.Hysteria2InboundOptions); ok {
-					err = v.UpdateUsers(opts.Users)
-				}
-			case adapter.UpdatableShadowsocksInbound:
-				if opts, ok := inb.Options.(*option.ShadowsocksInboundOptions); ok {
-					err = v.UpdateUsersByOptions(opts.Users)
-				}
-			case adapter.UpdatableInbound[option.TUICUser]:
-				if opts, ok := inb.Options.(*option.TUICInboundOptions); ok {
-					err = v.UpdateUsers(opts.Users)
-				}
-			case adapter.UpdatableInbound[option.AnyTLSUser]:
-				if opts, ok := inb.Options.(*option.AnyTLSInboundOptions); ok {
-					err = v.UpdateUsers(opts.Users)
-				}
-			case adapter.UpdatableInbound[option.MieruUser]:
-				if opts, ok := inb.Options.(*option.MieruInboundOptions); ok {
-					err = v.UpdateUsers(opts.Users)
-				}
-			case adapter.UpdatableInbound[auth.User]:
-				switch opts := inb.Options.(type) {
-				case *option.NaiveInboundOptions:
-					err = v.UpdateUsers(opts.Users)
-				case *option.SocksInboundOptions:
-					err = v.UpdateUsers(opts.Users)
-				case *option.HTTPMixedInboundOptions:
-					err = v.UpdateUsers(opts.Users)
-				}
-			}
-			if err == nil {
-				continue
-			}
-			nlog.Core().Warn("incremental update failed, recreating inbound", "tag", tag, "error", err)
+		existing, ok := im.Get(tag)
+		if !ok || existing.Type() != inb.Type {
+			return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
 		}
-
-		return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
+		updated, err := updateInboundUsers(existing, inb)
+		if err != nil {
+			nlog.Core().Warn("incremental update failed, recreating inbound", "tag", tag, "error", err)
+			return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
+		}
+		if !updated {
+			return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
+		}
 	}
 
 	if s.connTracker != nil {

@@ -144,3 +144,139 @@ func UserDiff(oldUsers, newUsers []model.UserSpec) (toAdd, toRemove []model.User
 	}
 	return
 }
+
+// inboundStructureView is the subset of NodeSpec that requires inbound recreate
+// when changed. Volatile / hot-reloadable fields (users, routes, KernelLogLevel,
+// CertConfig PEM, custom outbounds) are intentionally excluded.
+type inboundStructureView struct {
+	Protocol            string
+	ListenIP            string
+	ServerPort          int
+	Network             string
+	NetworkSettings     map[string]any
+	Cipher              string
+	Plugin              string
+	PluginOpt           string
+	ServerKey           string
+	TLS                 int
+	Flow                string
+	Decryption          string
+	TLSSettings         map[string]any
+	Host                string
+	ServerName          string
+	Domain              string
+	AutoTLS             bool
+	Version             int
+	UpMbps              int
+	DownMbps            int
+	Obfs                string
+	ObfsPassword        string
+	CongestionControl   string
+	PaddingScheme       string
+	Transport           string
+	TrafficPattern      string
+	Multiplex           *model.MultiplexConfig
+	AcceptProxyProtocol bool
+}
+
+// auxRestartView covers non-inbound NodeSpec fields that still need a full
+// kernel restart (sing-box cannot hot-swap outbounds after v1.14 Remove removal).
+type auxRestartView struct {
+	KernelType      string
+	CustomOutbounds []model.OutboundConfig
+}
+
+func normalizeAnyMap(m map[string]any) map[string]any {
+	if len(m) == 0 {
+		return nil
+	}
+	return m
+}
+
+// ComputeInboundStructureHash hashes inbound-relevant NodeSpec fields only.
+// User lists, routes, KernelLogLevel, and cert PEM are excluded so panel sync
+// noise does not false-trigger inbound recreate.
+func ComputeInboundStructureHash(nc *model.NodeSpec) string {
+	if nc == nil {
+		return ""
+	}
+	view := inboundStructureView{
+		Protocol:            nc.Protocol,
+		ListenIP:            nc.ListenIP,
+		ServerPort:          nc.ServerPort,
+		Network:             nc.Network,
+		NetworkSettings:     normalizeAnyMap(nc.NetworkSettings),
+		Cipher:              nc.Cipher,
+		Plugin:              nc.Plugin,
+		PluginOpt:           nc.PluginOpt,
+		ServerKey:           nc.ServerKey,
+		TLS:                 nc.TLS,
+		Flow:                nc.Flow,
+		Decryption:          nc.Decryption,
+		TLSSettings:         normalizeAnyMap(nc.TLSSettings),
+		Host:                nc.Host,
+		ServerName:          nc.ServerName,
+		Domain:              nc.Domain,
+		AutoTLS:             nc.AutoTLS,
+		Version:             nc.Version,
+		UpMbps:              nc.UpMbps,
+		DownMbps:            nc.DownMbps,
+		Obfs:                nc.Obfs,
+		ObfsPassword:        nc.ObfsPassword,
+		CongestionControl:   nc.CongestionControl,
+		PaddingScheme:       nc.PaddingScheme,
+		Transport:           nc.Transport,
+		TrafficPattern:      nc.TrafficPattern,
+		Multiplex:           nc.Multiplex,
+		AcceptProxyProtocol: nc.AcceptProxyProtocol,
+	}
+	data, _ := json.Marshal(view)
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum)
+}
+
+// ComputeAuxRestartHash hashes NodeSpec fields that are not inbound structure
+// but still require a full kernel restart when changed (e.g. custom outbounds).
+func ComputeAuxRestartHash(nc *model.NodeSpec) string {
+	if nc == nil {
+		return ""
+	}
+	view := auxRestartView{
+		KernelType:      nc.KernelType,
+		CustomOutbounds: nc.CustomOutbounds,
+	}
+	if len(view.CustomOutbounds) == 0 {
+		view.CustomOutbounds = nil
+	}
+	data, _ := json.Marshal(view)
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum)
+}
+
+// InboundNeedsRecreate reports whether a Reload must fall back to full kernel
+// restart because inbound structure, aux config, or TLS material changed.
+// User-only and route-only changes return false.
+func InboundNeedsRecreate(old, new *model.NodeSpec, tlsChanged bool) bool {
+	if tlsChanged {
+		return true
+	}
+	if old == nil || new == nil {
+		return old != new
+	}
+	if ComputeInboundStructureHash(old) != ComputeInboundStructureHash(new) {
+		return true
+	}
+	return ComputeAuxRestartHash(old) != ComputeAuxRestartHash(new)
+}
+
+// ComputeUserIdentityHash hashes user ID+UUID only (limits excluded).
+func ComputeUserIdentityHash(users []model.UserSpec) string {
+	sorted := make([]model.UserSpec, len(users))
+	copy(sorted, users)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	h := sha256.New()
+	for _, u := range sorted {
+		fmt.Fprintf(h, "%d:%s,", u.ID, u.UUID)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
