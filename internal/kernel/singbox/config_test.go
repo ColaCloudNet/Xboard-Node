@@ -3,6 +3,7 @@ package singbox
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/ColaCloudNet/Xboard-Node/internal/config"
@@ -885,5 +886,74 @@ func TestExtractECHInbound(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// --- Mieru ---
+
+func TestBuildMieru_TCPAndUUIDUsers(t *testing.T) {
+	nc := &panel.NodeConfig{
+		Protocol:   "mieru",
+		ServerPort: 11451,
+		Transport:  "TCP",
+	}
+	inbound := buildInbound(testNodeSpec(nc), testUsers, kernel.TLSCert{})
+	assertMapValue(t, inbound, "type", "mieru")
+	assertMapValue(t, inbound, "transport", "TCP")
+	assertMapValue(t, inbound, "listen", "::")
+	assertMapValue(t, inbound, "listen_port", 11451)
+	if _, ok := inbound["multiplex"]; ok {
+		t.Fatal("mieru inbound must not set multiplex")
+	}
+
+	users := inbound["users"].([]M)
+	if len(users) != 2 {
+		t.Fatalf("users: got %d, want 2", len(users))
+	}
+	assertMapValue(t, users[0], "name", "aaaaaaaa-1111-2222-3333-444444444444")
+	assertMapValue(t, users[0], "password", "aaaaaaaa-1111-2222-3333-444444444444")
+	assertMapValue(t, users[1], "name", "bbbbbbbb-5555-6666-7777-888888888888")
+	assertMapValue(t, users[1], "password", "bbbbbbbb-5555-6666-7777-888888888888")
+}
+
+func TestBuildMieru_EmptyTransportDefaultsTCP(t *testing.T) {
+	nc := &panel.NodeConfig{
+		Protocol:   "mieru",
+		ServerPort: 11451,
+	}
+	inbound := buildInbound(testNodeSpec(nc), testUsers, kernel.TLSCert{})
+	assertMapValue(t, inbound, "transport", "TCP")
+}
+
+func TestBuildMieru_TrafficPatternPassthrough(t *testing.T) {
+	nc := &panel.NodeConfig{
+		Protocol:       "mieru",
+		ServerPort:     11451,
+		Transport:      "TCP",
+		TrafficPattern: "GgQIARAK",
+	}
+	inbound := buildInbound(testNodeSpec(nc), testUsers, kernel.TLSCert{})
+	assertMapValue(t, inbound, "traffic_pattern", "GgQIARAK")
+}
+
+func TestBuildMieru_BadTransportRejectedByValidate(t *testing.T) {
+	nc := &panel.NodeConfig{
+		Protocol:   "mieru",
+		ServerPort: 11451,
+		Transport:  "UDP",
+	}
+	_, err := model.NodeSpecFromPanelValidated(nc, config.KernelConfig{Type: "singbox"})
+	if err == nil {
+		t.Fatal("expected validation error for UDP")
+	}
+	if !strings.Contains(err.Error(), "TCP only") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildMieru_KernelResolutionForcesSingbox(t *testing.T) {
+	got := model.ResolveKernelForProtocol("mieru", "xray")
+	if got != "singbox" {
+		t.Fatalf("got %q, want singbox", got)
 	}
 }

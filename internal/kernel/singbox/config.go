@@ -466,13 +466,17 @@ func buildInbound(nc *model.NodeSpec, users []model.UserSpec, tc kernel.TLSCert)
 
 func buildMieru(base M, nc *model.NodeSpec, users []model.UserSpec) M {
 	base["type"] = "mieru"
-	if nc.Transport != "" {
-		base["transport"] = nc.Transport
+	// v1: TCP only. Empty defaults to TCP (ValidateNodeSpec also normalizes).
+	transport := strings.TrimSpace(nc.Transport)
+	if transport == "" {
+		transport = "TCP"
 	}
+	base["transport"] = transport
 	if nc.TrafficPattern != "" {
 		base["traffic_pattern"] = nc.TrafficPattern
 	}
 
+	// Auth is UUID/UUID: name and password both use the panel user UUID.
 	userList := make([]M, 0, len(users))
 	for _, u := range users {
 		userList = append(userList, M{
@@ -481,6 +485,7 @@ func buildMieru(base M, nc *model.NodeSpec, users []model.UserSpec) M {
 		})
 	}
 	base["users"] = userList
+	// Multiplex is not applied on mieru inbound (sing-box mieru has no multiplex field).
 	return base
 }
 
