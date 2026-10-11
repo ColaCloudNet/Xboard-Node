@@ -1094,16 +1094,35 @@ func (s *Service) buildMetrics(status monitor.Status) map[string]interface{} {
 }
 
 // computeConfigHash returns a deterministic hash of the node config.
-// It uses JSON marshaling to ensure all fields are captured, ensuring that
-// any configuration change correctly triggers a kernel reload.
+// KernelLogLevel is excluded: it is applied via applyRemoteOverrides and must
+// not alone trigger kernel.Reload (which previously false-positive recreated
+// mieru inbounds every panel sync).
 func computeConfigHash(cfg *model.NodeSpec) string {
 	if cfg == nil {
 		return ""
 	}
+	clone := *cfg
+	clone.KernelLogLevel = ""
+	if len(clone.NetworkSettings) == 0 {
+		clone.NetworkSettings = nil
+	}
+	if len(clone.TLSSettings) == 0 {
+		clone.TLSSettings = nil
+	}
+	if len(clone.CustomRoutes) == 0 {
+		clone.CustomRoutes = nil
+	}
+	if len(clone.CustomOutbounds) == 0 {
+		clone.CustomOutbounds = nil
+	}
+	if len(clone.Routes) == 0 {
+		clone.Routes = nil
+	}
+	if len(clone.CustomRouteRules) == 0 {
+		clone.CustomRouteRules = nil
+	}
 	h := sha256.New()
-	// We marshal the entire config to be safe. Node config updates are low-frequency,
-	// so the robustness of capturing all fields outweighs the micro-performance of manual hashing.
-	data, _ := json.Marshal(cfg)
+	data, _ := json.Marshal(clone)
 	h.Write(data)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
