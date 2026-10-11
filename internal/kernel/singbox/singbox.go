@@ -11,7 +11,6 @@ import (
 	box "github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/include"
-	singLog "github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/auth"
 	singJSON "github.com/sagernet/sing/common/json"
@@ -166,10 +165,8 @@ func (s *SingBox) Start(nodeConfig *model.NodeSpec, users []model.UserSpec, tls 
 // then hard-closes. This avoids blocking the new instance's startup.
 func recycleOldBox(oldBox *box.Box, oldCancel context.CancelFunc, oldCtx context.Context, oldTracker *ConnTracker) {
 	// Step 1: close listen sockets so no new connections arrive on old ports.
-	if im := service.FromContext[adapter.InboundManager](oldCtx); im != nil {
-		_ = im.Close()
-	}
-
+	// sing-box v1.14+ tears down listen sockets via box.Close()/Scope.
+	// Best-effort drain before hard close.
 	// Step 2: drain in-flight connections (best-effort).
 	if oldTracker != nil {
 		deadline := time.Now().Add(drainTimeout)
@@ -227,8 +224,6 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 	} else {
 		nlog.Core().Debug("sing-box routing reloaded")
 	}
-
-	nopFactory := singLog.NewNOPFactory()
 
 	// Configuration hash check for inbound reconstruction
 	tlsChanged := !bytes.Equal(s.tls.CertPEM, tls.CertPEM) || !bytes.Equal(s.tls.KeyPEM, tls.KeyPEM)
@@ -289,16 +284,9 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 			}
 		}
 
-		// Config mismatch or incremental update failure: Reconstruct Inbound.
-		// Remove the existing inbound first so im.Create() can bind the same port.
-		// im.Create() cannot atomically swap a TCP listener — it tries to start the
-		// new socket before the old one is closed, causing "address already in use".
-		// The brief listen gap (< 1 ms) is far less disruptive than a full restart.
-		_ = im.Remove(tag) // ignore error when tag doesn't exist yet
-		logger := nopFactory.NewLogger(fmt.Sprintf("inbound/%s[%s]", inb.Type, tag))
-		if err := im.Create(s.ctx, router, logger, tag, inb.Type, inb.Options); err != nil {
-			return fmt.Errorf("recreate inbound %s: %w", tag, err)
-		}
+		// sing-box v1.14+ removed InboundManager.Remove (no hot-reload recreate).
+		// Fall back to full kernel restart so the caller can rebuild the box.
+		return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
 	}
 
 	// Trackers remain registered on the Router (which survives ReloadUsers).
@@ -342,14 +330,7 @@ func (s *SingBox) stop() {
 		return
 	}
 
-	// Step 1: close all listen sockets so no new connections are accepted.
-	// im.Close() sets m.started=false so the subsequent box.Close() call is a no-op
-	// for inbounds (avoids double-close), but box.Close() still tears down routers
-	// and outbounds.
-	if im := service.FromContext[adapter.InboundManager](s.ctx); im != nil {
-		_ = im.Close()
-	}
-
+	// Step 1+3: sing-box v1.14+ Lifecycle uses Scope cleanup; box.Close() stops listeners.
 	// Step 2: wait for in-flight connections to drain naturally (best-effort).
 	if s.connTracker != nil {
 		deadline := time.Now().Add(drainTimeout)
@@ -543,8 +524,6 @@ func (s *SingBox) reloadInboundsLocked(users []model.UserSpec) error {
 		return fmt.Errorf("router not available")
 	}
 
-	nopFactory := singLog.NewNOPFactory()
-
 	for _, inb := range opts.Inbounds {
 		tag := inb.Tag
 		if existing, ok := im.Get(tag); ok && existing.Type() == inb.Type {
@@ -598,11 +577,7 @@ func (s *SingBox) reloadInboundsLocked(users []model.UserSpec) error {
 			nlog.Core().Warn("incremental update failed, recreating inbound", "tag", tag, "error", err)
 		}
 
-		_ = im.Remove(tag)
-		logger := nopFactory.NewLogger(fmt.Sprintf("inbound/%s[%s]", inb.Type, tag))
-		if err := im.Create(s.ctx, router, logger, tag, inb.Type, inb.Options); err != nil {
-			return fmt.Errorf("recreate inbound %s: %w", tag, err)
-		}
+		return fmt.Errorf("inbound %s requires recreate (sing-box v1.14+ has no Remove); restart kernel", tag)
 	}
 
 	if s.connTracker != nil {

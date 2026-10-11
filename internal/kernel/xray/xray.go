@@ -571,8 +571,16 @@ func toMemoryUser(proto string, nc *model.NodeSpec, u model.UserSpec) (*protocol
 
 	case "shadowsocks":
 		if strings.HasPrefix(nc.Cipher, "2022-blake3-") {
-			// 2022-blake3 multi-user mode
-			mu.Account = &ss2022.MemoryAccount{Key: u.UUID}
+			// 2022-blake3 multi-user mode — Key is []byte since Xray v26.x
+			keyLen := 32
+			if strings.Contains(nc.Cipher, "aes-128") {
+				keyLen = 16
+			}
+			key, err := ss2022.ParseKey(u.UUID, keyLen)
+			if err != nil {
+				return nil, fmt.Errorf("parse ss2022 key: %w", err)
+			}
+			mu.Account = &ss2022.MemoryAccount{Key: key}
 		} else {
 			// Traditional SS — build via getCipher path
 			ct := parseCipherType(nc.Cipher)
@@ -602,7 +610,7 @@ func parseCipherType(cipher string) shadowsocks.CipherType {
 	case "xchacha20-ietf-poly1305", "xchacha20-poly1305":
 		return shadowsocks.CipherType_XCHACHA20_POLY1305
 	case "none", "plain":
-		return shadowsocks.CipherType_NONE
+		return shadowsocks.CipherType_UNKNOWN
 	default:
 		return shadowsocks.CipherType_AES_256_GCM
 	}

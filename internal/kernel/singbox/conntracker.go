@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common/buf"
 	singM "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
@@ -312,6 +313,12 @@ func (t *ConnTracker) RoutedPacketConnection(
 
 // checkDeviceGate rejects connections exceeding device limit.
 // Strategy: merge local + global state when fresh; local-only when stale.
+// RoutedFlow satisfies adapter.ConnectionTracker (TUN flow path). Node traffic
+// accounting stays on RoutedConnection/RoutedPacketConnection; flows are unused.
+func (t *ConnTracker) RoutedFlow(ctx context.Context, metadata adapter.InboundContext, matchedRule adapter.Rule, matchOutbound adapter.Outbound) tun.FlowTracker {
+	return nil
+}
+
 func (t *ConnTracker) checkDeviceGate(us *userStats, userID int, sourceIP string, limit int) bool {
 	if us == nil || limit <= 0 {
 		return false
