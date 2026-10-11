@@ -117,6 +117,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      # softprops ignores target_commitish when tag `dev` already exists, so
+      # force-move the rolling tag to this push's SHA before updating the Release.
+      # Pushing tag `dev` does not re-trigger CI (on.push.tags is only v*).
+      - name: Move rolling dev tag to HEAD
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f dev "${{ github.sha }}"
+          git push -f origin "refs/tags/dev"
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -126,6 +136,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'dev' }}
+          target_commitish: ${{ github.sha }}
           make_latest: ${{ startsWith(github.ref, 'refs/tags/') }}
           files: |
             dist/xboard-node-linux-amd64
