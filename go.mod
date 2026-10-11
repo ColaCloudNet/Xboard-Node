@@ -83,7 +83,7 @@ require (
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
 	github.com/digitalocean/godo v1.148.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
-	github.com/enfein/mieru/v3 v3.29.0 // indirect
+	github.com/enfein/mieru/v3 v3.38.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/florianl/go-nfqueue/v2 v2.0.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
@@ -261,6 +261,6 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
-replace github.com/sagernet/sing-box => github.com/ColaCloudNet/sing-box v1.14.0-alpha.2.0.20260316103356-2e665cb7e295
+replace github.com/sagernet/sing-box => github.com/ColaCloudNet/sing-box v1.14.0-alpha.2.0.20261011080905-f23e6ec4de44
 
 replace github.com/xtls/xray-core => github.com/ColaCloudNet/Xray-core v0.0.0-20260409213332-f47935539965
