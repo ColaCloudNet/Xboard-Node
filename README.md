@@ -71,7 +71,7 @@ Legacy single-panel config is fully compatible. Appending bindings auto-migrates
 
 ## Build
 
-Requires Go 1.26+.
+Requires Go 1.27+.
 
 ```bash
 make build        # local binaries (includes with_acme)
