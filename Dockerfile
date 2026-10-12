@@ -6,6 +6,9 @@ RUN apk add --no-cache git
 WORKDIR /build
 
 COPY go.mod go.sum ./
+# Local replace github.com/enfein/mieru/v3 => ./third_party/mieru needs the tree
+# present before go mod download.
+COPY third_party/mieru ./third_party/mieru
 RUN go mod download
 
 COPY . .
