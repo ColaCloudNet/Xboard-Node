@@ -1,0 +1,8 @@
+Package: mita
+Version: 3.38.1
+Section: net
+Priority: optional
+Architecture: amd64
+Depends: bash
+Maintainer: Mieru Authors
+Description: Mieru proxy server

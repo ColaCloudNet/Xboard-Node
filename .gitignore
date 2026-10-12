@@ -25,7 +25,9 @@ Thumbs.db
 vendor/
 config.json
 benchmark/
-third_party
+third_party/*
+!third_party/mieru/
+!third_party/mieru/**
 bench-results
 internal/kernel/singbox/config_bench_test.go
 internal/kernel/xray/config_bench_test.go

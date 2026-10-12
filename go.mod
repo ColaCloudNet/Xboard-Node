@@ -30,6 +30,7 @@ require (
 	github.com/libdns/vultr/v2 v2.0.4
 	github.com/sagernet/sing v0.9.7-0.20260929150544-0ad23b637bd4
 	github.com/sagernet/sing-box v1.14.3
+	github.com/sagernet/sing-tun v0.9.7-0.20261009020158-bca4bf029237
 	github.com/shirou/gopsutil/v4 v4.26.2
 	github.com/xtls/xray-core v1.260327.0
 	golang.org/x/term v0.46.0
@@ -228,7 +229,6 @@ require (
 	github.com/sagernet/sing-shadowsocks2 v0.2.2-0.20260929152114-a69d1086332b // indirect
 	github.com/sagernet/sing-shadowtls v0.2.2-0.20260928201441-a9c0127d5c99 // indirect
 	github.com/sagernet/sing-snell v0.0.0-20260904135315-bc5a12ac736f // indirect
-	github.com/sagernet/sing-tun v0.9.7-0.20261009020158-bca4bf029237 // indirect
 	github.com/sagernet/sing-usbip v0.0.0-20260817040617-28bd42667eca // indirect
 	github.com/sagernet/sing-vmess v0.2.9-0.20260929152519-9b95ab8c9478 // indirect
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1 // indirect
@@ -295,6 +295,8 @@ require (
 	zombiezen.com/go/capnproto2 v2.18.2+incompatible // indirect
 )
 
-replace github.com/sagernet/sing-box => github.com/ColaCloudNet/sing-box v1.13.2-0.20261011141022-4c7c77bf5610
+replace github.com/sagernet/sing-box => github.com/ColaCloudNet/sing-box v1.13.2-0.20261011173353-10f62edc587c
 
 replace github.com/xtls/xray-core => github.com/ColaCloudNet/Xray-core v0.0.0-20261011140717-ea30d79f8522
+
+replace github.com/enfein/mieru/v3 => ./third_party/mieru

@@ -52,8 +52,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/ColaCloudNet/Xray-core v0.0.0-20261011140717-ea30d79f8522 h1:ZDSP7Ljt343gwybOJDh6MxcE6xbIxPAckdqmrftd8+w=
 github.com/ColaCloudNet/Xray-core v0.0.0-20261011140717-ea30d79f8522/go.mod h1:YAACF9L/Pu1GznixHOBtrBqVcE95nhFjgU+gIEdWKlo=
-github.com/ColaCloudNet/sing-box v1.13.2-0.20261011141022-4c7c77bf5610 h1:EWJHqPAuY5+ykCC6+gL/DxWuW/C6o/XsHof9b99Koh0=
-github.com/ColaCloudNet/sing-box v1.13.2-0.20261011141022-4c7c77bf5610/go.mod h1:Voexo/yVjDJiSOaLAUAXErt1r9oiWkfviMyCLSjJF74=
+github.com/ColaCloudNet/sing-box v1.13.2-0.20261011173353-10f62edc587c h1:xpQVrRu64apTRsOLvRJTsZRLn1+Jby1L6nsZ6IxO5hw=
+github.com/ColaCloudNet/sing-box v1.13.2-0.20261011173353-10f62edc587c/go.mod h1:Voexo/yVjDJiSOaLAUAXErt1r9oiWkfviMyCLSjJF74=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/PuerkitoBio/purell v1.1.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/purell v1.1.1 h1:WEQqlqaGbrPkxLJWfBwQmfEAE1Z7ONdDLqrN38tNFfI=
@@ -192,8 +192,6 @@ github.com/docker/go-units v0.3.3/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDD
 github.com/docker/go-units v0.4.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
 github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/ISU=
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
-github.com/enfein/mieru/v3 v3.38.1 h1:UZ5zAJi0caSmaOniVy33pyY7ANxyf4PmPeLSuYZpDro=
-github.com/enfein/mieru/v3 v3.38.1/go.mod h1:zJBUCsi5rxyvHM8fjFf+GLaEl4OEjjBXr1s5F6Qd3hM=
 github.com/envoyproxy/go-control-plane v0.9.0/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
 github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1mIlRU8Am5FuJP05cCM98=
