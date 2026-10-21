@@ -119,6 +119,35 @@ func TestComputeUserIdentityHash_IgnoresLimits(t *testing.T) {
 	}
 }
 
+func TestRemovedUUIDs(t *testing.T) {
+	oldUsers := []model.UserSpec{
+		{ID: 1, UUID: "stay"},
+		{ID: 2, UUID: "gone"},
+		{ID: 3, UUID: "rotated"},
+		{ID: 4, UUID: ""},
+		{ID: 5, UUID: "dup"},
+		{ID: 6, UUID: "dup"},
+	}
+	newUsers := []model.UserSpec{
+		{ID: 1, UUID: "stay"},
+		{ID: 9, UUID: "rotated"}, // same secret, different id: still authorized
+		{ID: 7, UUID: "added"},
+	}
+	got := RemovedUUIDs(oldUsers, newUsers)
+	want := []string{"gone", "dup"}
+	if len(got) != len(want) {
+		t.Fatalf("RemovedUUIDs() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("RemovedUUIDs() = %#v, want %#v", got, want)
+		}
+	}
+	if RemovedUUIDs(oldUsers, oldUsers) != nil {
+		t.Fatal("identical UUID sets must not report removals")
+	}
+}
+
 func TestComputeHash_StillIncludesUsers(t *testing.T) {
 	nc := baseMieruSpec()
 	a := ComputeHash(nc, []model.UserSpec{{ID: 1, UUID: "u1"}})
