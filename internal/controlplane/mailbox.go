@@ -244,14 +244,17 @@ func applyUserDelta(users *[]model.UserSpec, action string, delta []model.UserSp
 		for _, user := range delta {
 			removeIDs[user.ID] = struct{}{}
 		}
-		filtered := current[:0]
+		filtered := make([]model.UserSpec, 0, len(current))
 		for _, user := range current {
 			if _, ok := removeIDs[user.ID]; ok {
 				continue
 			}
 			filtered = append(filtered, user)
 		}
-		current = append([]model.UserSpec(nil), filtered...)
+		// Important: keep a non-nil empty slice when the last user is removed.
+		// append([]T(nil), empty...) yields nil, and SyncUsers treats nil as
+		// "no update" — so an empty wipe would never reach UpdateUsers/CloseByUUID.
+		current = filtered
 	default:
 		return false
 	}

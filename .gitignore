@@ -28,6 +28,8 @@ benchmark/
 third_party/*
 !third_party/mieru/
 !third_party/mieru/**
+!third_party/sing-anytls/
+!third_party/sing-anytls/**
 bench-results
 internal/kernel/singbox/config_bench_test.go
 internal/kernel/xray/config_bench_test.go

@@ -3,6 +3,7 @@ module github.com/ColaCloudNet/Xboard-Node
 go 1.27
 
 require (
+	github.com/anytls/sing-anytls v0.0.11
 	github.com/caddyserver/certmagic v0.25.3-0.20260421143802-60d9d8b415d6
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
@@ -58,7 +59,6 @@ require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/anthropics/anthropic-sdk-go v1.26.0 // indirect
-	github.com/anytls/sing-anytls v0.0.11 // indirect
 	github.com/apernet/quic-go v0.61.1-0.20260806010916-184d081eef3e // indirect
 	github.com/asaskevich/govalidator v0.0.0-20200907205600-7a23bdc65eef // indirect
 	github.com/aws/aws-sdk-go-v2 v1.39.1 // indirect
@@ -300,3 +300,9 @@ replace github.com/sagernet/sing-box => github.com/ColaCloudNet/sing-box v1.13.2
 replace github.com/xtls/xray-core => github.com/ColaCloudNet/Xray-core v0.0.0-20261011140717-ea30d79f8522
 
 replace github.com/enfein/mieru/v3 => ./third_party/mieru
+
+// anytls sessions are authenticated once, then multiplexed. Stock v0.0.11
+// UpdateUsers only swaps the password map, so a user removed by the panel
+// keeps proxying on the existing ServerSession. This tree closes those
+// sessions. Upstream proposal: https://github.com/anytls/sing-anytls/pull/4
+replace github.com/anytls/sing-anytls => ./third_party/sing-anytls

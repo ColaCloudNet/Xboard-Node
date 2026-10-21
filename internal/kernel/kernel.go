@@ -145,6 +145,35 @@ func UserDiff(oldUsers, newUsers []model.UserSpec) (toAdd, toRemove []model.User
 	return
 }
 
+// RemovedUUIDs returns UUIDs present in oldUsers and absent from newUsers.
+// Order follows oldUsers. Empty and duplicate UUIDs are reported once.
+// A UUID that moved to a different user ID is kept: it is still authorized.
+func RemovedUUIDs(oldUsers, newUsers []model.UserSpec) []string {
+	keep := make(map[string]struct{}, len(newUsers))
+	for _, u := range newUsers {
+		if u.UUID == "" {
+			continue
+		}
+		keep[u.UUID] = struct{}{}
+	}
+	seen := make(map[string]struct{})
+	var removed []string
+	for _, u := range oldUsers {
+		if u.UUID == "" {
+			continue
+		}
+		if _, ok := keep[u.UUID]; ok {
+			continue
+		}
+		if _, dup := seen[u.UUID]; dup {
+			continue
+		}
+		seen[u.UUID] = struct{}{}
+		removed = append(removed, u.UUID)
+	}
+	return removed
+}
+
 // inboundStructureView is the subset of NodeSpec that requires inbound recreate
 // when changed. Volatile / hot-reloadable fields (users, routes, KernelLogLevel,
 // CertConfig PEM, custom outbounds) are intentionally excluded.

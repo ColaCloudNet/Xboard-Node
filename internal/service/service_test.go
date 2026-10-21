@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ColaCloudNet/Xboard-Node/internal/cert"
@@ -32,6 +33,9 @@ type fakeKernel struct {
 
 	speedLimitFunc  func(string) *rate.Limiter
 	deviceLimitFunc func(string) (int, bool)
+
+	closedMu sync.Mutex
+	closed   []string
 }
 
 func (f *fakeKernel) Name() string                      { return "fake" }
@@ -88,8 +92,19 @@ func (f *fakeKernel) CloseConnection(ctx context.Context, connID string) error {
 	return nil
 }
 func (f *fakeKernel) CloseUserConnections(ctx context.Context, uuid string) error {
-	_, _ = ctx, uuid
+	_ = ctx
+	f.closedMu.Lock()
+	f.closed = append(f.closed, uuid)
+	f.closedMu.Unlock()
 	return nil
+}
+
+func (f *fakeKernel) closedUUIDs() []string {
+	f.closedMu.Lock()
+	defer f.closedMu.Unlock()
+	out := make([]string, len(f.closed))
+	copy(out, f.closed)
+	return out
 }
 func (f *fakeKernel) SetSpeedLimitFunc(fn func(uuid string) *rate.Limiter) { f.speedLimitFunc = fn }
 func (f *fakeKernel) SetDeviceLimitFunc(fn func(uuid string) (int, bool))  { f.deviceLimitFunc = fn }
@@ -168,6 +183,87 @@ func TestApplyUserUpdateRestoresStateWhenKernelAndRestartFail(t *testing.T) {
 	}
 	if s.speedTracker.GetLimiter("uuid-new") != nil {
 		t.Fatal("expected new limiter to be removed after rollback")
+	}
+}
+
+func TestApplyUserUpdateClosesRemovedUUIDs(t *testing.T) {
+	k := &fakeKernel{running: true}
+	s := newTestService(k)
+	s.lastConfig = &model.NodeSpec{Protocol: "anytls"}
+	s.updateUserState([]model.UserSpec{
+		{ID: 1, UUID: "uuid-stay", SpeedLimit: 1},
+		{ID: 2, UUID: "uuid-gone", SpeedLimit: 1},
+	})
+
+	next := []model.UserSpec{
+		{ID: 1, UUID: "uuid-stay", SpeedLimit: 8},
+		{ID: 3, UUID: "uuid-new", SpeedLimit: 1},
+	}
+	s.applyUserUpdate(context.Background(), next, computeUserHash(next))
+
+	got := k.closedUUIDs()
+	if len(got) != 1 || got[0] != "uuid-gone" {
+		t.Fatalf("CloseUserConnections calls = %#v, want [uuid-gone]", got)
+	}
+}
+
+func TestApplyUserUpdateLimitOnlyDoesNotClose(t *testing.T) {
+	k := &fakeKernel{running: true}
+	s := newTestService(k)
+	s.lastConfig = &model.NodeSpec{Protocol: "anytls"}
+	users := []model.UserSpec{{ID: 1, UUID: "uuid-stay", SpeedLimit: 1}}
+	s.updateUserState(users)
+
+	next := []model.UserSpec{{ID: 1, UUID: "uuid-stay", SpeedLimit: 9}}
+	s.applyUserUpdate(context.Background(), next, computeUserHash(next))
+	if got := k.closedUUIDs(); len(got) != 0 {
+		t.Fatalf("CloseUserConnections calls = %#v, want none", got)
+	}
+}
+
+func TestApplyUserUpdateDoesNotCloseWhenKernelUpdateFails(t *testing.T) {
+	k := &fakeKernel{
+		running:   true,
+		updateErr: errors.New("update failed"),
+		startErr:  errors.New("restart failed"),
+	}
+	s := newTestService(k)
+	s.lastConfig = &model.NodeSpec{Protocol: "anytls"}
+	s.updateUserState([]model.UserSpec{{ID: 1, UUID: "uuid-old"}})
+
+	next := []model.UserSpec{{ID: 2, UUID: "uuid-new"}}
+	s.applyUserUpdate(context.Background(), next, computeUserHash(next))
+	if got := k.closedUUIDs(); len(got) != 0 {
+		t.Fatalf("CloseUserConnections calls = %#v, want none after rollback", got)
+	}
+}
+
+func TestApplyUserDeltaRemoveClosesRemovedUUID(t *testing.T) {
+	k := &fakeKernel{running: true}
+	s := newTestService(k)
+	s.lastConfig = &model.NodeSpec{Protocol: "anytls"}
+	s.updateUserState([]model.UserSpec{
+		{ID: 1, UUID: "uuid-stay"},
+		{ID: 2, UUID: "uuid-gone"},
+	})
+
+	s.applyUserDelta(context.Background(), "remove", []model.UserSpec{{ID: 2, UUID: "uuid-gone"}})
+	got := k.closedUUIDs()
+	if len(got) != 1 || got[0] != "uuid-gone" {
+		t.Fatalf("CloseUserConnections calls = %#v, want [uuid-gone]", got)
+	}
+}
+
+func TestApplyUserDeltaUUIDRotationClosesOldUUID(t *testing.T) {
+	k := &fakeKernel{running: true}
+	s := newTestService(k)
+	s.lastConfig = &model.NodeSpec{Protocol: "anytls"}
+	s.updateUserState([]model.UserSpec{{ID: 1, UUID: "uuid-old"}})
+
+	s.applyUserDelta(context.Background(), "add", []model.UserSpec{{ID: 1, UUID: "uuid-new"}})
+	got := k.closedUUIDs()
+	if len(got) != 1 || got[0] != "uuid-old" {
+		t.Fatalf("CloseUserConnections calls = %#v, want [uuid-old]", got)
 	}
 }
 

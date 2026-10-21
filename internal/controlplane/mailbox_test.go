@@ -162,3 +162,25 @@ func TestNodeMailboxDeltaFailedApplyNotifies(t *testing.T) {
 		t.Fatal("expected NeedsReconcile for invalid delta action")
 	}
 }
+
+func TestNodeMailboxRemoveLastUserKeepsNonNilEmpty(t *testing.T) {
+	mb := NewNodeMailbox()
+	mb.SeedBaseline([]model.UserSpec{{ID: 2, UUID: "u2"}}, nil)
+	mb.MarkReady()
+	<-mb.NotifyCh()
+	mb.Apply(Event{
+		Type:        EventSyncUserDelta,
+		DeltaAction: "remove",
+		DeltaUsers:  []model.UserSpec{{ID: 2}},
+	})
+	state := mb.DrainIfReady()
+	if !state.HasUsers {
+		t.Fatal("expected HasUsers after removing last user")
+	}
+	if state.Users == nil {
+		t.Fatal("Users must be non-nil empty slice so SyncUsers applies the wipe")
+	}
+	if len(state.Users) != 0 {
+		t.Fatalf("len(Users)=%d, want 0", len(state.Users))
+	}
+}

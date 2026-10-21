@@ -784,6 +784,9 @@ func (s *Service) applyUserUpdate(ctx context.Context, users []model.UserSpec, n
 		}
 		return
 	}
+	// toRemove covers ID deletions. CloseUserConnections also drops UUIDs that
+	// rotated onto a new secret, which UserDiff does not list as removals.
+	s.closeRemovedUserConnections(ctx, prevUsers, users)
 	if newHash != "" {
 		s.lastUserHash = newHash
 	}
@@ -810,7 +813,12 @@ func (s *Service) applyUserDelta(ctx context.Context, action string, deltaUsers 
 		for _, delta := range deltaUsers {
 			for _, old := range s.lastUsers {
 				if old.ID == delta.ID && old.UUID != delta.UUID {
-					s.kernel.RemoveUsers([]model.UserSpec{old})
+					if _, err := s.kernel.RemoveUsers([]model.UserSpec{old}); err != nil {
+						nlog.Core().Warn(fmt.Sprintf("RemoveUsers before UUID rotation failed: %v", err))
+					}
+					if err := s.kernel.CloseUserConnections(ctx, old.UUID); err != nil {
+						nlog.Core().Warn(fmt.Sprintf("CloseUserConnections %s: %v", old.UUID, err))
+					}
 					break
 				}
 			}
@@ -851,12 +859,25 @@ func (s *Service) applyUserDelta(ctx context.Context, action string, deltaUsers 
 				return
 			}
 		}
+		s.closeRemovedUserConnections(ctx, prevUsers, filtered)
 		if s.nodeLog != nil && removed > 0 {
 			s.nodeLog.Info(fmt.Sprintf("users removed: -%d", removed))
 		}
 
 	default:
 		nlog.Core().Warn(fmt.Sprintf("unknown user delta action: %s", action))
+	}
+}
+
+// closeRemovedUserConnections terminates live proxy flows for every UUID that
+// previous authorized and current does not. anytls (and other multiplexed
+// inbounds) authenticate once per connection; dropping the user from the
+// inbound table is not enough to stop an already-open session.
+func (s *Service) closeRemovedUserConnections(ctx context.Context, previous, current []model.UserSpec) {
+	for _, uuid := range kernel.RemovedUUIDs(previous, current) {
+		if err := s.kernel.CloseUserConnections(ctx, uuid); err != nil {
+			nlog.Core().Warn(fmt.Sprintf("CloseUserConnections %s: %v", uuid, err))
+		}
 	}
 }
 

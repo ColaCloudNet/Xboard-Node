@@ -31,7 +31,9 @@ const drainTimeout = 5 * time.Second
 //
 // User operations (AddUsers/RemoveUsers/UpdateUsers) use sing-box's native
 // UpdatableInbound interface, which hot-swaps user credentials without
-// restarting listeners — zero connection disruption.
+// restarting listeners. Connections that belong to users who are still
+// authorized stay up. Connections whose UUID is no longer authorized are
+// force-closed (ForceCloseUser).
 type SingBox struct {
 	cfg config.KernelConfig
 
@@ -267,7 +269,6 @@ func (s *SingBox) Reload(nodeConfig *model.NodeSpec, users []model.UserSpec, tls
 	return nil
 }
 
-
 // updateInboundUsers hot-swaps credentials on an existing inbound via
 // UpdatableInbound. updated=false means the inbound type has no user API
 // (caller decides whether to no-op or recreate).
@@ -473,8 +474,8 @@ func (s *SingBox) AddUsers(users []model.UserSpec) (int, error) {
 	return len(toAdd), nil
 }
 
-// RemoveUsers hot-swaps users out of running inbounds. Zero connection disruption
-// for remaining users.
+// RemoveUsers hot-swaps users out of running inbounds. Remaining users keep
+// their connections. Removed UUIDs are force-closed.
 func (s *SingBox) RemoveUsers(users []model.UserSpec) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -503,6 +504,9 @@ func (s *SingBox) RemoveUsers(users []model.UserSpec) (int, error) {
 	if err := s.reloadInboundsLocked(kept); err != nil {
 		return 0, err
 	}
+	// Close after the inbound user table is updated, so a kicked session
+	// cannot open another stream with the old password.
+	s.closeUUIDsLocked(kernel.RemovedUUIDs(s.users, kept))
 	s.users = kept
 	return removed, nil
 }
@@ -518,6 +522,9 @@ func (s *SingBox) UpdateUsers(users []model.UserSpec) (added, removed int, err e
 
 	toAdd, toRemove := kernel.UserDiff(s.users, users)
 	added, removed = len(toAdd), len(toRemove)
+	// UUID rotation keeps the user ID, so it is not in toRemove. Drop every
+	// UUID that the new set does not still authorize.
+	removedUUIDs := kernel.RemovedUUIDs(s.users, users)
 
 	if added == 0 && removed == 0 {
 		// Only limits may have changed — update tracker map.
@@ -531,8 +538,24 @@ func (s *SingBox) UpdateUsers(users []model.UserSpec) (added, removed int, err e
 	if err = s.reloadInboundsLocked(users); err != nil {
 		return 0, 0, err
 	}
+	s.closeUUIDsLocked(removedUUIDs)
 	s.users = users
 	return
+}
+
+// closeUUIDsLocked force-closes tracked connections for each UUID.
+// Must be called with s.mu held. CloseUserConnections takes s.mu itself, so
+// this talks to the tracker directly.
+func (s *SingBox) closeUUIDsLocked(uuids []string) {
+	if s.connTracker == nil || len(uuids) == 0 {
+		return
+	}
+	for _, uuid := range uuids {
+		n := s.connTracker.CloseByUUID(uuid)
+		if n > 0 {
+			nlog.Core().Info("singbox: force-closed user connections", "uuid", uuid, "closed", n)
+		}
+	}
 }
 
 // reloadInboundsLocked hot-swaps inbound users using UpdatableInbound.
