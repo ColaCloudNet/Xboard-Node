@@ -41,7 +41,7 @@ func TestResolveKernelForNode_MieruWinsOverXHTTP(t *testing.T) {
 	}
 }
 
-func TestValidateNodeSpec_MieruEmptyTransportDefaultsTCP(t *testing.T) {
+func TestValidateNodeSpec_MieruEmptyTransportDefaultsBoth(t *testing.T) {
 	spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
 		Protocol:   "mieru",
 		ServerPort: 11451,
@@ -49,8 +49,8 @@ func TestValidateNodeSpec_MieruEmptyTransportDefaultsTCP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if spec.Transport != "TCP" {
-		t.Fatalf("Transport=%q, want TCP", spec.Transport)
+	if spec.Transport != MieruTransportBoth {
+		t.Fatalf("Transport=%q, want %s", spec.Transport, MieruTransportBoth)
 	}
 }
 
@@ -69,17 +69,49 @@ func TestValidateNodeSpec_MieruTCPOK(t *testing.T) {
 	}
 }
 
-func TestValidateNodeSpec_MieruRejectsUDP(t *testing.T) {
+func TestValidateNodeSpec_MieruUDPAndBothOK(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"UDP", MieruTransportUDP},
+		{"udp", MieruTransportUDP},
+		{"BOTH", MieruTransportBoth},
+		{"both", MieruTransportBoth},
+		{"tcp+udp", MieruTransportBoth},
+		{"UDP + TCP", MieruTransportBoth},
+		{"tcp/udp", MieruTransportBoth},
+		{"UDP/TCP", MieruTransportBoth},
+	}
+	for _, tc := range cases {
+		spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
+			Protocol:   "mieru",
+			ServerPort: 11451,
+			Transport:  tc.in,
+		}, config.KernelConfig{Type: "singbox"})
+		if err != nil {
+			t.Fatalf("transport %q: unexpected error: %v", tc.in, err)
+		}
+		if spec.Transport != tc.want {
+			t.Fatalf("transport %q: got %q, want %q", tc.in, spec.Transport, tc.want)
+		}
+	}
+}
+
+func TestValidateNodeSpec_MieruRejectsUnknownTransport(t *testing.T) {
 	_, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
 		Protocol:   "mieru",
 		ServerPort: 11451,
-		Transport:  "UDP",
+		Transport:  "QUIC",
 	}, config.KernelConfig{Type: "singbox"})
 	if err == nil {
-		t.Fatal("expected error for UDP transport")
+		t.Fatal("expected error for unknown transport")
 	}
-	if !strings.Contains(err.Error(), "TCP only") {
+	if !strings.Contains(err.Error(), "QUIC") || !strings.Contains(err.Error(), "not supported") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(err.Error(), "TCP only") {
+		t.Fatalf("error still describes v1 TCP-only policy: %v", err)
 	}
 }
 

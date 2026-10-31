@@ -892,13 +892,17 @@ func TestExtractECHInbound(t *testing.T) {
 // --- Mieru ---
 
 func TestBuildMieru_TCPAndUUIDUsers(t *testing.T) {
-	nc := &panel.NodeConfig{
+	inbounds := mieruInbounds(t, &panel.NodeConfig{
 		Protocol:   "mieru",
 		ServerPort: 11451,
 		Transport:  "TCP",
+	})
+	if len(inbounds) != 1 {
+		t.Fatalf("inbounds: got %d, want 1", len(inbounds))
 	}
-	inbound := buildInbound(testNodeSpec(nc), testUsers, kernel.TLSCert{})
+	inbound := inbounds[0]
 	assertMapValue(t, inbound, "type", "mieru")
+	assertMapValue(t, inbound, "tag", "mieru-in")
 	assertMapValue(t, inbound, "transport", "TCP")
 	assertMapValue(t, inbound, "listen", "::")
 	assertMapValue(t, inbound, "listen_port", 11451)
@@ -916,37 +920,108 @@ func TestBuildMieru_TCPAndUUIDUsers(t *testing.T) {
 	assertMapValue(t, users[1], "password", "bbbbbbbb-5555-6666-7777-888888888888")
 }
 
-func TestBuildMieru_EmptyTransportDefaultsTCP(t *testing.T) {
-	nc := &panel.NodeConfig{
+func TestBuildMieru_EmptyTransportDefaultsDualListen(t *testing.T) {
+	// Unvalidated empty transport must still expand, matching ValidateNodeSpec.
+	inbounds := buildMieruInbounds(testNodeSpec(&panel.NodeConfig{
 		Protocol:   "mieru",
 		ServerPort: 11451,
+	}), testUsers)
+	assertMieruDualInbounds(t, inbounds, 11451)
+}
+
+func TestBuildMieru_BothTransportDualListen(t *testing.T) {
+	inbounds := mieruInbounds(t, &panel.NodeConfig{
+		Protocol:       "mieru",
+		ServerPort:     11451,
+		Transport:      "TCP+UDP",
+		TrafficPattern: "GgQIARAK",
+	})
+	assertMieruDualInbounds(t, inbounds, 11451)
+	assertMapValue(t, inbounds[0], "traffic_pattern", "GgQIARAK")
+	assertMapValue(t, inbounds[1], "traffic_pattern", "GgQIARAK")
+}
+
+func TestBuildMieru_ExplicitUDP(t *testing.T) {
+	inbounds := mieruInbounds(t, &panel.NodeConfig{
+		Protocol:   "mieru",
+		ServerPort: 11451,
+		Transport:  "udp",
+	})
+	if len(inbounds) != 1 {
+		t.Fatalf("inbounds: got %d, want 1", len(inbounds))
 	}
-	inbound := buildInbound(testNodeSpec(nc), testUsers, kernel.TLSCert{})
-	assertMapValue(t, inbound, "transport", "TCP")
+	assertMapValue(t, inbounds[0], "tag", "mieru-in")
+	assertMapValue(t, inbounds[0], "transport", "UDP")
+	assertMapValue(t, inbounds[0], "listen_port", 11451)
+}
+
+func assertMieruDualInbounds(t *testing.T, inbounds []M, port int) {
+	t.Helper()
+	if len(inbounds) != 2 {
+		t.Fatalf("inbounds: got %d, want 2", len(inbounds))
+	}
+	assertMapValue(t, inbounds[0], "type", "mieru")
+	assertMapValue(t, inbounds[0], "tag", "mieru-tcp")
+	assertMapValue(t, inbounds[0], "transport", "TCP")
+	assertMapValue(t, inbounds[0], "listen", "::")
+	assertMapValue(t, inbounds[0], "listen_port", port)
+	assertMapValue(t, inbounds[1], "type", "mieru")
+	assertMapValue(t, inbounds[1], "tag", "mieru-udp")
+	assertMapValue(t, inbounds[1], "transport", "UDP")
+	assertMapValue(t, inbounds[1], "listen", "::")
+	assertMapValue(t, inbounds[1], "listen_port", port)
+	if _, ok := inbounds[0]["multiplex"]; ok {
+		t.Fatal("mieru inbound must not set multiplex")
+	}
+	if inbounds[0]["transport"] == "BOTH" || inbounds[1]["transport"] == "BOTH" {
+		t.Fatal("sing-box transport must be TCP or UDP, not BOTH")
+	}
+	for i, inbound := range inbounds {
+		users, ok := inbound["users"].([]M)
+		if !ok || len(users) != 2 {
+			t.Fatalf("inbound %d users: %#v", i, inbound["users"])
+		}
+	}
+}
+
+func mieruInbounds(t *testing.T, nc *panel.NodeConfig) []M {
+	t.Helper()
+	spec, err := model.NodeSpecFromPanelValidated(nc, config.KernelConfig{Type: "singbox"})
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	cfg := buildConfig(config.KernelConfig{LogLevel: "warn"}, spec, testUsers, kernel.TLSCert{})
+	inbounds, ok := cfg["inbounds"].([]M)
+	if !ok {
+		t.Fatal("inbounds missing")
+	}
+	return inbounds
 }
 
 func TestBuildMieru_TrafficPatternPassthrough(t *testing.T) {
-	nc := &panel.NodeConfig{
+	inbounds := mieruInbounds(t, &panel.NodeConfig{
 		Protocol:       "mieru",
 		ServerPort:     11451,
 		Transport:      "TCP",
 		TrafficPattern: "GgQIARAK",
+	})
+	if len(inbounds) != 1 {
+		t.Fatalf("inbounds: got %d, want 1", len(inbounds))
 	}
-	inbound := buildInbound(testNodeSpec(nc), testUsers, kernel.TLSCert{})
-	assertMapValue(t, inbound, "traffic_pattern", "GgQIARAK")
+	assertMapValue(t, inbounds[0], "traffic_pattern", "GgQIARAK")
 }
 
 func TestBuildMieru_BadTransportRejectedByValidate(t *testing.T) {
 	nc := &panel.NodeConfig{
 		Protocol:   "mieru",
 		ServerPort: 11451,
-		Transport:  "UDP",
+		Transport:  "QUIC",
 	}
 	_, err := model.NodeSpecFromPanelValidated(nc, config.KernelConfig{Type: "singbox"})
 	if err == nil {
-		t.Fatal("expected validation error for UDP")
+		t.Fatal("expected validation error for unknown transport")
 	}
-	if !strings.Contains(err.Error(), "TCP only") {
+	if !strings.Contains(err.Error(), "not supported") || !strings.Contains(err.Error(), "QUIC") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
