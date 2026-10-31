@@ -102,47 +102,21 @@ func ResolveKernelForNode(protocol, network, configuredKernel string) string {
 }
 
 const (
-	// MieruTransportTCP is the sing-box mieru inbound transport for TCP.
+	// MieruTransportTCP is the sing-box mieru inbound transport string for TCP.
 	MieruTransportTCP = "TCP"
-	// MieruTransportUDP is the sing-box mieru inbound transport for UDP.
+	// MieruTransportUDP is the sing-box mieru inbound transport string for UDP.
 	MieruTransportUDP = "UDP"
-	// MieruTransportBoth is the panel value for simultaneous TCP and UDP listen.
-	// sing-box rejects a BOTH transport string; config generation expands it
-	// into two inbounds whose transport fields are TCP and UDP.
-	MieruTransportBoth = "BOTH"
 )
 
-// NormalizeMieruTransport maps a panel transport to TCP, UDP, or BOTH.
-// Empty means BOTH (listen on TCP and UDP together). TCP+UDP and TCP/UDP,
-// in either order, are aliases of BOTH. Unknown values are rejected.
-func NormalizeMieruTransport(raw string) (string, error) {
-	compact := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(raw), " ", ""))
-	switch compact {
-	case "":
-		return MieruTransportBoth, nil
-	case MieruTransportTCP:
-		return MieruTransportTCP, nil
-	case MieruTransportUDP:
-		return MieruTransportUDP, nil
-	case MieruTransportBoth, "TCP+UDP", "UDP+TCP", "TCP/UDP", "UDP/TCP":
-		return MieruTransportBoth, nil
-	default:
-		return "", fmt.Errorf("mieru transport %q is not supported (allowed: TCP, UDP, BOTH; dual listen is BOTH, also accepted as TCP+UDP or TCP/UDP)", strings.TrimSpace(raw))
-	}
-}
-
-// validateMieruFields normalizes and checks mieru-specific panel fields.
-// Empty transport defaults to BOTH (simultaneous TCP and UDP listen).
+// validateMieruFields checks mieru-specific panel fields.
+// Panel transport is not a listen-mode control: every mieru node listens on
+// TCP and UDP together, so the field is discarded and never rejected.
 func validateMieruFields(n *NodeSpec) error {
 	if n == nil || !strings.EqualFold(strings.TrimSpace(n.Protocol), "mieru") {
 		return nil
 	}
 
-	transport, err := NormalizeMieruTransport(n.Transport)
-	if err != nil {
-		return err
-	}
-	n.Transport = transport
+	n.Transport = ""
 
 	if pat := strings.TrimSpace(n.TrafficPattern); pat != "" {
 		if _, err := base64.StdEncoding.DecodeString(pat); err != nil {

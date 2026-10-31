@@ -8,7 +8,7 @@ Xboard-Node runs **mieru** exclusively on the **sing-box** kernel. There is no X
 | --- | --- | --- |
 | `protocol` | yes | `mieru` |
 | `server_port` | yes | listen port |
-| `transport` | no | Empty → `BOTH` (listen on TCP and UDP together). Explicit `TCP` or `UDP` stays single-protocol. `BOTH`, `TCP+UDP`, and `TCP/UDP` (either order, spaces ignored) are the dual value. Anything else is rejected. |
+| `transport` | ignored | Not a listen-mode control. Any value, including `TCP`, `UDP`, or empty, is discarded. An enabled mieru node always listens on TCP and UDP together. |
 | `traffic_pattern` | no | base64 string (sing-box passthrough) |
 | Auth | — | each user: `name` = UUID, `password` = UUID |
 | TLS / ACME | — | not used for mieru inbound |
@@ -25,22 +25,19 @@ sing-box inbounds are built with `"listen": "::"` (dual-stack). Panel `listen_ip
 
 ## Transport written into sing-box
 
-The mieru inbound in the pinned sing-box kernel accepts only `"transport": "TCP"` or `"transport": "UDP"`. A value such as `BOTH` or `TCP+UDP` is rejected by sing-box (`transport must be TCP or UDP`).
+The mieru inbound in the pinned sing-box kernel accepts only `"transport": "TCP"` or `"transport": "UDP"` on a single inbound (`transport must be TCP or UDP`). There is no dual-listen value on one inbound.
 
-Dual listen is therefore **two inbounds on the same `listen` and `listen_port`**, the same shape as `third_party/mieru/test/deploy/singbox/singbox-server-config.json`:
+Every enabled mieru node is therefore **two inbounds on the same `listen` and `listen_port`**, the same shape as `third_party/mieru/test/deploy/singbox/singbox-server-config.json`:
 
-| Panel `transport` | sing-box inbounds |
-| --- | --- |
-| empty, `BOTH`, `TCP+UDP`, `TCP/UDP` | `mieru-tcp` with `"transport": "TCP"`, then `mieru-udp` with `"transport": "UDP"` |
-| `TCP` | one inbound, tag `mieru-in`, `"transport": "TCP"` |
-| `UDP` | one inbound, tag `mieru-in`, `"transport": "UDP"` |
+- `mieru-tcp` with `"transport": "TCP"`
+- `mieru-udp` with `"transport": "UDP"`
 
-Strings actually written into each inbound's `transport` field are only `TCP` and `UDP`.
+Those are the only transport strings written into sing-box. The panel `transport` field is not read.
 
 ## Operations
 
 - If the kernel fails to start (bad outbound, port in use, etc.), the process / machine child node **does not auto-retry**. Restart the process (systemd/`xbctl service restart`/container) after fixing the cause.
-- **Upgrade:** nodes whose panel `transport` is empty used to be normalized to TCP-only. After this change they dual-listen, and the kernel restarts once because the inbound set changes (one `mieru-in` becomes `mieru-tcp` + `mieru-udp`). Nodes that already store `TCP` stay TCP-only; set the field to empty or `BOTH` to turn on UDP as well. No panel schema migration is required.
+- **Upgrade:** mieru nodes that were TCP-only (the previous empty-transport default, or an explicit panel `TCP` / `UDP`) start listening on both protocols. The inbound set changes from one `mieru-in` to `mieru-tcp` + `mieru-udp`, so the kernel restarts once. No panel edit is required, and changing the panel `transport` value does not select a single protocol.
 
 ## TCP underlay idle reclaim
 

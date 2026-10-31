@@ -477,33 +477,16 @@ func buildInbound(nc *model.NodeSpec, users []model.UserSpec, tc kernel.TLSCert)
 // buildMieruInbounds writes sing-box mieru inbounds.
 //
 // The pinned sing-box inbound accepts only transport "TCP" or "UDP"
-// (validateMieruInboundOptions: "transport must be TCP or UDP"). There is no
-// BOTH value. Simultaneous listen is two inbounds on the same listen address
-// and port, matching third_party/mieru/test/deploy/singbox/singbox-server-config.json.
-// Empty or BOTH therefore emits transport "TCP" and transport "UDP".
+// (validateMieruInboundOptions: "transport must be TCP or UDP"). Simultaneous
+// listen is two inbounds on the same listen address and port, matching
+// third_party/mieru/test/deploy/singbox/singbox-server-config.json.
+// Panel transport is ignored: every mieru node gets both inbounds.
 func buildMieruInbounds(nc *model.NodeSpec, users []model.UserSpec) []M {
-	mode, err := model.NormalizeMieruTransport(nc.Transport)
-	if err != nil {
-		nlog.Core().Error("invalid mieru transport; not writing a sing-box inbound", "transport", nc.Transport, "error", err)
-		return nil
-	}
-
-	protocols := []string{model.MieruTransportTCP}
-	switch mode {
-	case model.MieruTransportUDP:
-		protocols = []string{model.MieruTransportUDP}
-	case model.MieruTransportBoth:
-		protocols = []string{model.MieruTransportTCP, model.MieruTransportUDP}
-	}
-
+	protocols := []string{model.MieruTransportTCP, model.MieruTransportUDP}
 	out := make([]M, 0, len(protocols))
 	for _, transport := range protocols {
-		tag := nc.Protocol + "-in"
-		if mode == model.MieruTransportBoth {
-			tag = "mieru-" + strings.ToLower(transport)
-		}
 		inbound := M{
-			"tag":         tag,
+			"tag":         "mieru-" + strings.ToLower(transport),
 			"listen":      "::",
 			"listen_port": nc.ServerPort,
 			"type":        "mieru",

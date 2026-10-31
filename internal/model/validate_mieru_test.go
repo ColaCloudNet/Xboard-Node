@@ -41,77 +41,25 @@ func TestResolveKernelForNode_MieruWinsOverXHTTP(t *testing.T) {
 	}
 }
 
-func TestValidateNodeSpec_MieruEmptyTransportDefaultsBoth(t *testing.T) {
-	spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
-		Protocol:   "mieru",
-		ServerPort: 11451,
-	}, config.KernelConfig{Type: "xray"}) // xray config must still validate via auto-resolve
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if spec.Transport != MieruTransportBoth {
-		t.Fatalf("Transport=%q, want %s", spec.Transport, MieruTransportBoth)
-	}
-}
-
-func TestValidateNodeSpec_MieruTCPOK(t *testing.T) {
-	spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
-		Protocol:       "mieru",
-		ServerPort:     11451,
-		Transport:      "tcp",
-		TrafficPattern: "GgQIARAK",
-	}, config.KernelConfig{Type: "singbox"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if spec.Transport != "TCP" {
-		t.Fatalf("Transport=%q, want normalized TCP", spec.Transport)
-	}
-}
-
-func TestValidateNodeSpec_MieruUDPAndBothOK(t *testing.T) {
-	cases := []struct {
-		in   string
-		want string
-	}{
-		{"UDP", MieruTransportUDP},
-		{"udp", MieruTransportUDP},
-		{"BOTH", MieruTransportBoth},
-		{"both", MieruTransportBoth},
-		{"tcp+udp", MieruTransportBoth},
-		{"UDP + TCP", MieruTransportBoth},
-		{"tcp/udp", MieruTransportBoth},
-		{"UDP/TCP", MieruTransportBoth},
-	}
-	for _, tc := range cases {
+func TestValidateNodeSpec_MieruIgnoresPanelTransport(t *testing.T) {
+	// xray config must still validate via auto-resolve. Panel transport,
+	// including explicit TCP/UDP and unknown values, is discarded.
+	for _, transport := range []string{"", "tcp", "TCP", "UDP", "BOTH", "QUIC"} {
 		spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
-			Protocol:   "mieru",
-			ServerPort: 11451,
-			Transport:  tc.in,
-		}, config.KernelConfig{Type: "singbox"})
+			Protocol:       "mieru",
+			ServerPort:     11451,
+			Transport:      transport,
+			TrafficPattern: "GgQIARAK",
+		}, config.KernelConfig{Type: "xray"})
 		if err != nil {
-			t.Fatalf("transport %q: unexpected error: %v", tc.in, err)
+			t.Fatalf("transport %q: unexpected error: %v", transport, err)
 		}
-		if spec.Transport != tc.want {
-			t.Fatalf("transport %q: got %q, want %q", tc.in, spec.Transport, tc.want)
+		if spec.Transport != "" {
+			t.Fatalf("transport %q: Transport=%q, want empty (panel value ignored)", transport, spec.Transport)
 		}
-	}
-}
-
-func TestValidateNodeSpec_MieruRejectsUnknownTransport(t *testing.T) {
-	_, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
-		Protocol:   "mieru",
-		ServerPort: 11451,
-		Transport:  "QUIC",
-	}, config.KernelConfig{Type: "singbox"})
-	if err == nil {
-		t.Fatal("expected error for unknown transport")
-	}
-	if !strings.Contains(err.Error(), "QUIC") || !strings.Contains(err.Error(), "not supported") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if strings.Contains(err.Error(), "TCP only") {
-		t.Fatalf("error still describes v1 TCP-only policy: %v", err)
+		if spec.TrafficPattern != "GgQIARAK" {
+			t.Fatalf("transport %q: TrafficPattern=%q", transport, spec.TrafficPattern)
+		}
 	}
 }
 
