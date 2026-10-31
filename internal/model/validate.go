@@ -101,21 +101,22 @@ func ResolveKernelForNode(protocol, network, configuredKernel string) string {
 	return ResolveKernelForProtocol(protocol, resolved)
 }
 
-// validateMieruFields normalizes and checks mieru-specific panel fields.
-// v1 is TCP-only: empty transport defaults to "TCP"; any other value is rejected.
+const (
+	// MieruTransportTCP is the sing-box mieru inbound transport string for TCP.
+	MieruTransportTCP = "TCP"
+	// MieruTransportUDP is the sing-box mieru inbound transport string for UDP.
+	MieruTransportUDP = "UDP"
+)
+
+// validateMieruFields checks mieru-specific panel fields.
+// Panel transport is not a listen-mode control: every mieru node listens on
+// TCP and UDP together, so the field is discarded and never rejected.
 func validateMieruFields(n *NodeSpec) error {
 	if n == nil || !strings.EqualFold(strings.TrimSpace(n.Protocol), "mieru") {
 		return nil
 	}
 
-	transport := strings.TrimSpace(n.Transport)
-	if transport == "" {
-		n.Transport = "TCP"
-	} else if !strings.EqualFold(transport, "TCP") {
-		return fmt.Errorf("mieru transport %q is not supported in v1 (TCP only); got %q", transport, n.Transport)
-	} else {
-		n.Transport = "TCP"
-	}
+	n.Transport = ""
 
 	if pat := strings.TrimSpace(n.TrafficPattern); pat != "" {
 		if _, err := base64.StdEncoding.DecodeString(pat); err != nil {

@@ -53,9 +53,8 @@ func buildConfig(kcfg config.KernelConfig, nc *model.NodeSpec, users []model.Use
 		"outbounds": outbounds,
 	}
 
-	inbound := buildInbound(nc, users, tc)
-	if inbound != nil {
-		cfg["inbounds"] = []M{inbound}
+	if inbounds := buildInbounds(nc, users, tc); len(inbounds) > 0 {
+		cfg["inbounds"] = inbounds
 	}
 
 	// Merge panel routes and static config routes
@@ -429,6 +428,19 @@ func mergeCustomSingboxRoute(cfg M, customRoute map[string]any) {
 	}
 }
 
+// buildInbounds returns every inbound for the node. Mieru dual listen is two
+// sing-box inbounds; every other protocol is a single inbound.
+func buildInbounds(nc *model.NodeSpec, users []model.UserSpec, tc kernel.TLSCert) []M {
+	if nc != nil && strings.EqualFold(strings.TrimSpace(nc.Protocol), "mieru") {
+		return buildMieruInbounds(nc, users)
+	}
+	inbound := buildInbound(nc, users, tc)
+	if inbound == nil {
+		return nil
+	}
+	return []M{inbound}
+}
+
 func buildInbound(nc *model.NodeSpec, users []model.UserSpec, tc kernel.TLSCert) M {
 	base := M{
 		"tag":         nc.Protocol + "-in",
@@ -457,36 +469,45 @@ func buildInbound(nc *model.NodeSpec, users []model.UserSpec, tc kernel.TLSCert)
 		return buildSocks(base, users)
 	case "http":
 		return buildHTTP(base, nc, users, tc)
-	case "mieru":
-		return buildMieru(base, nc, users)
 	default:
 		return nil
 	}
 }
 
-func buildMieru(base M, nc *model.NodeSpec, users []model.UserSpec) M {
-	base["type"] = "mieru"
-	// v1: TCP only. Empty defaults to TCP (ValidateNodeSpec also normalizes).
-	transport := strings.TrimSpace(nc.Transport)
-	if transport == "" {
-		transport = "TCP"
+// buildMieruInbounds writes sing-box mieru inbounds.
+//
+// The pinned sing-box inbound accepts only transport "TCP" or "UDP"
+// (validateMieruInboundOptions: "transport must be TCP or UDP"). Simultaneous
+// listen is two inbounds on the same listen address and port, matching
+// third_party/mieru/test/deploy/singbox/singbox-server-config.json.
+// Panel transport is ignored: every mieru node gets both inbounds.
+func buildMieruInbounds(nc *model.NodeSpec, users []model.UserSpec) []M {
+	protocols := []string{model.MieruTransportTCP, model.MieruTransportUDP}
+	out := make([]M, 0, len(protocols))
+	for _, transport := range protocols {
+		inbound := M{
+			"tag":         "mieru-" + strings.ToLower(transport),
+			"listen":      "::",
+			"listen_port": nc.ServerPort,
+			"type":        "mieru",
+			"transport":   transport,
+		}
+		if nc.TrafficPattern != "" {
+			inbound["traffic_pattern"] = nc.TrafficPattern
+		}
+		// Auth is UUID/UUID: name and password both use the panel user UUID.
+		userList := make([]M, 0, len(users))
+		for _, u := range users {
+			userList = append(userList, M{
+				"name":     u.UUID,
+				"password": u.UUID,
+			})
+		}
+		inbound["users"] = userList
+		// Multiplex is not applied on mieru inbound (sing-box mieru has no multiplex field).
+		out = append(out, inbound)
 	}
-	base["transport"] = transport
-	if nc.TrafficPattern != "" {
-		base["traffic_pattern"] = nc.TrafficPattern
-	}
-
-	// Auth is UUID/UUID: name and password both use the panel user UUID.
-	userList := make([]M, 0, len(users))
-	for _, u := range users {
-		userList = append(userList, M{
-			"name":     u.UUID,
-			"password": u.UUID,
-		})
-	}
-	base["users"] = userList
-	// Multiplex is not applied on mieru inbound (sing-box mieru has no multiplex field).
-	return base
+	return out
 }
 
 type ss2022Config struct {

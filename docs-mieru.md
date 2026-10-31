@@ -8,7 +8,7 @@ Xboard-Node runs **mieru** exclusively on the **sing-box** kernel. There is no X
 | --- | --- | --- |
 | `protocol` | yes | `mieru` |
 | `server_port` | yes | listen port |
-| `transport` | no | v1 **TCP only**. Empty → `TCP`. `UDP` and other values are rejected. |
+| `transport` | ignored | Not a listen-mode control. Any value, including `TCP`, `UDP`, or empty, is discarded. An enabled mieru node always listens on TCP and UDP together. |
 | `traffic_pattern` | no | base64 string (sing-box passthrough) |
 | Auth | — | each user: `name` = UUID, `password` = UUID |
 | TLS / ACME | — | not used for mieru inbound |
@@ -23,10 +23,21 @@ Xboard-Node runs **mieru** exclusively on the **sing-box** kernel. There is no X
 
 sing-box inbounds are built with `"listen": "::"` (dual-stack). Panel `listen_ip` is currently **not** applied to sing-box mieru (or other sing-box inbounds). Bind filtering should be done with host firewall / network namespace if needed.
 
+## Transport written into sing-box
+
+The mieru inbound in the pinned sing-box kernel accepts only `"transport": "TCP"` or `"transport": "UDP"` on a single inbound (`transport must be TCP or UDP`). There is no dual-listen value on one inbound.
+
+Every enabled mieru node is therefore **two inbounds on the same `listen` and `listen_port`**, the same shape as `third_party/mieru/test/deploy/singbox/singbox-server-config.json`:
+
+- `mieru-tcp` with `"transport": "TCP"`
+- `mieru-udp` with `"transport": "UDP"`
+
+Those are the only transport strings written into sing-box. The panel `transport` field is not read.
+
 ## Operations
 
 - If the kernel fails to start (bad outbound, port in use, etc.), the process / machine child node **does not auto-retry**. Restart the process (systemd/`xbctl service restart`/container) after fixing the cause.
-- Sprint A scope is TCP-only; UDP E2E is out of scope for v1.
+- **Upgrade:** mieru nodes that were TCP-only (the previous empty-transport default, or an explicit panel `TCP` / `UDP`) start listening on both protocols. The inbound set changes from one `mieru-in` to `mieru-tcp` + `mieru-udp`, so the kernel restarts once. No panel edit is required, and changing the panel `transport` value does not select a single protocol.
 
 ## TCP underlay idle reclaim
 

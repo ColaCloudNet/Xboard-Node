@@ -41,45 +41,25 @@ func TestResolveKernelForNode_MieruWinsOverXHTTP(t *testing.T) {
 	}
 }
 
-func TestValidateNodeSpec_MieruEmptyTransportDefaultsTCP(t *testing.T) {
-	spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
-		Protocol:   "mieru",
-		ServerPort: 11451,
-	}, config.KernelConfig{Type: "xray"}) // xray config must still validate via auto-resolve
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if spec.Transport != "TCP" {
-		t.Fatalf("Transport=%q, want TCP", spec.Transport)
-	}
-}
-
-func TestValidateNodeSpec_MieruTCPOK(t *testing.T) {
-	spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
-		Protocol:       "mieru",
-		ServerPort:     11451,
-		Transport:      "tcp",
-		TrafficPattern: "GgQIARAK",
-	}, config.KernelConfig{Type: "singbox"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if spec.Transport != "TCP" {
-		t.Fatalf("Transport=%q, want normalized TCP", spec.Transport)
-	}
-}
-
-func TestValidateNodeSpec_MieruRejectsUDP(t *testing.T) {
-	_, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
-		Protocol:   "mieru",
-		ServerPort: 11451,
-		Transport:  "UDP",
-	}, config.KernelConfig{Type: "singbox"})
-	if err == nil {
-		t.Fatal("expected error for UDP transport")
-	}
-	if !strings.Contains(err.Error(), "TCP only") {
-		t.Fatalf("unexpected error: %v", err)
+func TestValidateNodeSpec_MieruIgnoresPanelTransport(t *testing.T) {
+	// xray config must still validate via auto-resolve. Panel transport,
+	// including explicit TCP/UDP and unknown values, is discarded.
+	for _, transport := range []string{"", "tcp", "TCP", "UDP", "BOTH", "QUIC"} {
+		spec, err := NodeSpecFromPanelValidated(&panel.NodeConfig{
+			Protocol:       "mieru",
+			ServerPort:     11451,
+			Transport:      transport,
+			TrafficPattern: "GgQIARAK",
+		}, config.KernelConfig{Type: "xray"})
+		if err != nil {
+			t.Fatalf("transport %q: unexpected error: %v", transport, err)
+		}
+		if spec.Transport != "" {
+			t.Fatalf("transport %q: Transport=%q, want empty (panel value ignored)", transport, spec.Transport)
+		}
+		if spec.TrafficPattern != "GgQIARAK" {
+			t.Fatalf("transport %q: TrafficPattern=%q", transport, spec.TrafficPattern)
+		}
 	}
 }
 
